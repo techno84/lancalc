@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pytest.ini
+include test_all.py
+recursive-include lancalc *.py 

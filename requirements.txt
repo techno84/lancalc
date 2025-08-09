@@ -1,0 +1,8 @@
+iptools>=0.7.0
+netifaces>=0.11.0
+PyInstaller>=6.0.0
+pytest>=8.0.0
+pytest-qt>=4.0.0
+PyQt5>=5.15.0
+PyQt5-Qt5>=5.15.0
+PyQt5_sip>=12.15.0
