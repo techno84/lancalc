@@ -41,16 +41,6 @@ After installation, launch the application with the command:
 lancalc
 ```
 
-
-
-### Run
-
-Launch the application:
-
-```bash
-lancalc
-```
-
 ### Uninstall
 
 ```bash
@@ -63,7 +53,7 @@ That's it! The application will start and automatically detect your current netw
 
 ### Prerequisites
 
-Python 3.7+ is required, along with the following libraries:
+Python 3.9+ is required, along with the following libraries:
 
 ```bash
 pip3 install -r requirements.txt
@@ -75,8 +65,6 @@ Clone the repository and install in development mode:
 
 ```bash
 git clone https://github.com/lancalc/lancalc.git
-cd lancalc
-pip3 install -e .
 ```
 
 ### Running from Source
