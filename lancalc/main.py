@@ -92,7 +92,7 @@ def calc_network(ip_cidr: str) -> dict:
     else:
         hostmin = net.network_address
         hostmax = net.broadcast_address
-        hosts_str = f"{total}*"  # как в GUI: пометка для /31, /32
+        hosts_str = f"{total}*"
 
     res = {
         "Network": str(net.network_address),
@@ -116,7 +116,6 @@ def _is_headless_linux() -> bool:
     return sys.platform.startswith('linux') and not os.environ.get('DISPLAY')
 
 
-# ------------------------------ GUI (если есть) ---------------------------- #
 if GUI_AVAILABLE:
     class ClickToCopyLineEdit(QLineEdit):
         def mousePressEvent(self, event):
@@ -336,8 +335,6 @@ if GUI_AVAILABLE:
             logger.info("LanCalc application closing")
             super().closeEvent(event)
 
-
-# ------------------------------ Точка входа -------------------------------- #
 
 def _run_gui() -> int:
     if not GUI_AVAILABLE:
