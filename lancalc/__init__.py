@@ -5,9 +5,9 @@
 LanCalc - A desktop application for calculating network configurations
 """
 
-__version__ = '0.1.5'
-__author__ = 'wachawo'
-__email__ = 'wachawo@example.com'
+__version__ = '0.1.6'
+__author__ = 'Aleksandr Pimenov'
+__email__ = 'wachawo@gmail.com'
 
 from .main import main, LanCalc
 
