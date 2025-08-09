@@ -46,14 +46,44 @@ test_cases = [
         'hosts': '65534',
         'ip_color': 'black'
     }),
-    ("192.168.1.1", "32", {
-        'network': '192.168.1.1',
+    ("192.168.2.1", "32", {
+        'network': '192.168.2.1',
         'prefix': '/32',
         'netmask': '255.255.255.255',
         'broadcast': '-',
-        'hostmin': '192.168.1.1',
-        'hostmax': '192.168.1.1',
+        'hostmin': '192.168.2.1',
+        'hostmax': '192.168.2.1',
         'hosts': '1*',
+        'ip_color': 'black'
+    }),
+    ("192.168.3.1/24", "", {
+        'network': '192.168.3.0',
+        'prefix': '/24',
+        'netmask': '255.255.255.0',
+        'broadcast': '192.168.3.255',
+        'hostmin': '192.168.3.1',
+        'hostmax': '192.168.3.254',
+        'hosts': '254',
+        'ip_color': 'black'
+    }),
+    ("10.0.0.1/8", "", {
+        'network': '10.0.0.0',
+        'prefix': '/8',
+        'netmask': '255.0.0.0',
+        'broadcast': '10.255.255.255',
+        'hostmin': '10.0.0.1',
+        'hostmax': '10.255.255.254',
+        'hosts': '16777214',
+        'ip_color': 'black'
+    }),
+    ("172.16.0.1/16", "", {
+        'network': '172.16.0.0',
+        'prefix': '/16',
+        'netmask': '255.255.0.0',
+        'broadcast': '172.16.255.255',
+        'hostmin': '172.16.0.1',
+        'hostmax': '172.16.255.254',
+        'hosts': '65534',
         'ip_color': 'black'
     }),
     ("256.256.256.256", "24", {
@@ -81,11 +111,15 @@ def test_lancalc_calculate(app, ip, prefix, expected):
     """Test network calculation through GUI"""
     # Set IP
     app.ip_input.setText(ip)
-    # Set prefix in combobox
-    for i in range(app.network_selector.count()):
-        if app.network_selector.itemText(i).startswith(prefix + "/"):
-            app.network_selector.setCurrentIndex(i)
-            break
+    # If prefix is embedded in input (CIDR), simulate GUI behavior
+    if prefix == "" and "/" in ip:
+        app.apply_cidr_from_text(ip)
+    # Set prefix in combobox if not CIDR
+    else:
+        for i in range(app.network_selector.count()):
+            if app.network_selector.itemText(i).startswith(prefix + "/"):
+                app.network_selector.setCurrentIndex(i)
+                break
     # Call calculate
     app.calculate_network()
     # Check outputs
