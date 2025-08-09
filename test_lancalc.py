@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import pytest
 import logging
+import pytest
+import sys
 from lancalc.main import LanCalc
 
 # Configure logging for tests
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    handlers=[logging.StreamHandler(sys.stderr)],
+    level=logging.DEBUG,
+    format='%(asctime)s.%(msecs)03d [%(levelname)s]: (%(name)s.%(funcName)s) - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Test data: (ip, prefix, expected values in output fields)
 test_cases = [

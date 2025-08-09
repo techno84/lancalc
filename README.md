@@ -14,6 +14,13 @@ Support IPv4 address formats, subnet masks and prefixes. This tool is particular
 
 ### Installation
 
+Install PIP
+
+```bash
+curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+python3 /tmp/get-pip.py
+```
+
 Install LanCalc with one command:
 
 ```bash
