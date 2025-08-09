@@ -10,6 +10,8 @@ Changes:
 - Logging to stderr (logging), computed answer — to stdout.
 - GUI starts if no argument is provided and GUI is available.
 """
+import argparse
+import netifaces
 import sys
 import os
 import re
@@ -23,6 +25,7 @@ try:
         QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
     )
     from PyQt5.QtCore import Qt
+    from PyQt5.QtCore import QEvent
     from PyQt5.QtGui import QFont, QKeyEvent
     GUI_AVAILABLE = True
 except Exception:
@@ -40,7 +43,6 @@ except Exception:
     except Exception:
         VERSION = "0.0.0"
 
-# --------------------------- Logging to stderr --------------------------- #
 logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stderr)],
     level=logging.INFO,
@@ -48,11 +50,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
-
-
-# --------------------------- Utilities and calculation ------------------------------ #
-_cidr_re = re.compile(r"^(?P<ip>\d{1,3}(?:\.\d{1,3}){3})/(?P<prefix>\d{1,2})$")
-
 
 def _validate_ip(ip_str: str) -> None:
     try:
@@ -75,7 +72,8 @@ def calc_network(ip_cidr: str) -> dict:
     """Calculation of the network from a string like '10.16.69.1/24'. Returns a dict with fields.
     Logs are written to stderr, the result is used for stdout/GUI.
     """
-    m = _cidr_re.match(ip_cidr.strip())
+    s = re.compile(r"^(?P<ip>\d{1,3}(?:\.\d{1,3}){3})/(?P<prefix>\d{1,2})$")
+    m = s.match(ip_cidr.strip())
     if not m:
         raise ValueError("Expected ADDRESS in CIDR form, e.g. 10.16.69.1/24")
     ip = m.group('ip')
@@ -153,6 +151,8 @@ if GUI_AVAILABLE:
                 self.ip_input.setAlignment(Qt.AlignRight)
                 ip_layout.addWidget(ip_label)
                 ip_layout.addWidget(self.ip_input)
+                # Defer parsing "IP/prefix" until focus is lost or Enter/Tab is pressed
+                self.ip_input.installEventFilter(self)
                 main_layout.addLayout(ip_layout)
 
                 network_layout = QHBoxLayout()
@@ -216,6 +216,62 @@ if GUI_AVAILABLE:
             except Exception as e:
                 logger.error(f"Failed to initialize UI: {e}")
 
+        def apply_cidr_from_text(self, text: str) -> None:
+            """Apply CIDR from the IP input when triggered (focus out or Enter/Tab).
+            Splits "IP/prefix" and updates selector when valid. Highlights red on invalid.
+            """
+            try:
+                t = (text or "").strip()
+                if not t:
+                    self.ip_input.setStyleSheet("color: black;")
+                    return
+                if "/" in t:
+                    m = re.match(r"^(\d{1,3}(?:\.\d{1,3}){3})(?:\/(\d{1,2}))?$", t)
+                    if not m:
+                        self.ip_input.setStyleSheet("color: red;")
+                        return
+                    ip_address, cidr = m.group(1), m.group(2)
+                    if not self.validate_ip_address(ip_address):
+                        self.ip_input.setStyleSheet("color: red;")
+                        return
+                    if cidr is not None and self.validate_cidr(cidr) and 0 <= int(cidr) < self.network_selector.count():
+                        try:
+                            self.ip_input.blockSignals(True)
+                            self.ip_input.setText(ip_address)
+                        finally:
+                            self.ip_input.blockSignals(False)
+                        self.network_selector.setCurrentIndex(int(cidr))
+                        self.ip_input.setStyleSheet("color: black;")
+                        return
+                    # CIDR invalid or not present in selector
+                    self.ip_input.setStyleSheet("color: red;")
+                    return
+                # No slash: validate full IP once on trigger
+                if self.validate_ip_address(t):
+                    self.ip_input.setStyleSheet("color: black;")
+                else:
+                    self.ip_input.setStyleSheet("color: red;")
+            except Exception as e:
+                logger.error(f"Error applying CIDR from IP input: {e}")
+                self.ip_input.setStyleSheet("color: red;")
+
+        def eventFilter(self, obj, event):
+            try:
+                if obj is self.ip_input:
+                    if event.type() == QEvent.FocusOut:
+                        self.apply_cidr_from_text(self.ip_input.text())
+                        return False
+                    if event.type() == QEvent.KeyPress:
+                        key = event.key()
+                        if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab):
+                            self.apply_cidr_from_text(self.ip_input.text())
+                            # Do not consume; keep normal behavior (focus move, calculate on return, etc.)
+                            return False
+                return super().eventFilter(obj, event)
+            except Exception as e:
+                logger.error(f"Error in event filter: {e}")
+                return super().eventFilter(obj, event)
+
         def validate_ip_address(self, ip_str: str) -> bool:
             try:
                 ipaddress.IPv4Address(ip_str)
@@ -260,7 +316,6 @@ if GUI_AVAILABLE:
 
         def set_default_values(self):
             try:
-                import netifaces
                 gateways = netifaces.gateways()
                 default_interface = gateways['default'][netifaces.AF_INET][1]
                 addrs = netifaces.ifaddresses(default_interface)
@@ -347,7 +402,7 @@ def _run_gui() -> int:
 
 
 def main(argv=None) -> int:
-    import argparse
+
 
     parser = argparse.ArgumentParser(
         prog="lancalc",
