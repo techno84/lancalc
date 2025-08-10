@@ -94,9 +94,23 @@ pre-commit autoupdate
 pytest -v
 ```
 
+### Test Build
+```bash
+pip3 install -e .
+~/.local/bin/lancalc
+```
+
 ### Test Build Linux
 ```bash
-pip3 install git+file://$(pwd) && export PATH="$HOME/.local/bin:$PATH" && lancalc
+pip3 install git+file://$(pwd) 
+export PATH="$HOME/.local/bin:$PATH" 
+lancalc
+```
+
+### Test Build Windows
+```powershell
+pip3 install "git+file://$(Get-Location)"
+lancalc
 ```
 
 ### Test Build Windows
