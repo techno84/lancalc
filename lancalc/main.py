@@ -11,13 +11,15 @@ Changes:
 - GUI starts if no argument is provided and GUI is available.
 """
 import argparse
-import netifaces
 import sys
 import os
 import re
 import ipaddress
 import iptools
 import logging
+import platform
+import socket
+import subprocess
 
 # Try to import Qt — not required for CLI
 try:
@@ -51,14 +53,71 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def _validate_ip(ip_str: str) -> None:
+
+def get_ip() -> str:
+    """Return the primary local IPv4 address without external libs."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        # Fallback: hostname resolution (may return 127.0.0.1 in some setups)
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def cidr_from_netmask(mask: str) -> int:
+    try:
+        parts = [int(x) for x in mask.split('.')]
+        return sum(bin(p).count('1') for p in parts)
+    except Exception:
+        return 24
+
+
+def get_cidr(ip: str) -> int:
+    """Best-effort CIDR detection using system tools; defaults to /24."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            # Parse 'ipconfig' output near the given IP
+            out = subprocess.check_output(["ipconfig"], encoding="utf-8", errors="ignore")
+            lines = out.splitlines()
+            for i, line in enumerate(lines):
+                if ip in line:
+                    for j in range(i, min(i+8, len(lines))):
+                        if ("Subnet Mask" in lines[j]) or ("Маска подсети" in lines[j]):
+                            mask = lines[j].split(":")[-1].strip()
+                            return cidr_from_netmask(mask)
+            return 24
+        else:
+            # Try `ip -o -4 addr show` to get prefix length
+            try:
+                out = subprocess.check_output(["ip", "-o", "-4", "addr", "show"], encoding="utf-8", errors="ignore")
+                for line in out.splitlines():
+                    # example token: 'inet 192.168.1.10/24'
+                    m = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", line)
+                    if m and m.group(1) == ip:
+                        return int(m.group(2))
+            except Exception:
+                pass
+            # Fallback default
+            return 24
+    except Exception:
+        return 24
+
+
+def validate_ip(ip_str: str) -> None:
     try:
         ipaddress.IPv4Address(ip_str)
     except Exception as e:
         raise ValueError(f"Invalid IPv4 address: {ip_str} ({e})")
 
 
-def _validate_prefix(prefix_str: str) -> int:
+def validate_prefix(prefix_str: str) -> int:
     try:
         p = int(prefix_str)
     except Exception:
@@ -69,16 +128,16 @@ def _validate_prefix(prefix_str: str) -> int:
 
 
 def calc_network(ip_cidr: str) -> dict:
-    """Calculation of the network from a string like '10.16.69.1/24'. Returns a dict with fields.
+    """Calculation of the network from a string like '192.168.88.254/24'. Returns a dict with fields.
     Logs are written to stderr, the result is used for stdout/GUI.
     """
     s = re.compile(r"^(?P<ip>\d{1,3}(?:\.\d{1,3}){3})/(?P<prefix>\d{1,2})$")
     m = s.match(ip_cidr.strip())
     if not m:
-        raise ValueError("Expected ADDRESS in CIDR form, e.g. 10.16.69.1/24")
+        raise ValueError("Expected ADDRESS in CIDR form, e.g. 192.168.88.254/24")
     ip = m.group('ip')
-    prefix = _validate_prefix(m.group('prefix'))
-    _validate_ip(ip)
+    prefix = validate_prefix(m.group('prefix'))
+    validate_ip(ip)
 
     net = ipaddress.IPv4Network(f"{ip}/{prefix}", strict=False)
     total = net.num_addresses
@@ -110,7 +169,7 @@ def print_result_stdout(res: dict) -> None:
         print(f"{k}: {res[k]}")
 
 
-def _is_headless_linux() -> bool:
+def is_headless_linux() -> bool:
     return sys.platform.startswith('linux') and not os.environ.get('DISPLAY')
 
 
@@ -316,13 +375,22 @@ if GUI_AVAILABLE:
 
         def set_default_values(self):
             try:
-                gateways = netifaces.gateways()
-                default_interface = gateways['default'][netifaces.AF_INET][1]
-                addrs = netifaces.ifaddresses(default_interface)
-                ip_info = addrs[netifaces.AF_INET][0]
-                default_ip = ip_info['addr']
-                netmask = ip_info['netmask']
-                default_cidr = sum([bin(int(x)).count('1') for x in netmask.split('.')])
+                system = platform.system()
+                if system == 'Linux':
+                    import netifaces
+                    gateways = netifaces.gateways()
+                    default_interface = gateways['default'][netifaces.AF_INET][1]
+                    addrs = netifaces.ifaddresses(default_interface)
+                    ip_info = addrs[netifaces.AF_INET][0]
+                    default_ip = ip_info['addr']
+                    netmask = ip_info['netmask']
+                    default_cidr = sum([bin(int(x)).count('1') for x in netmask.split('.')])
+                elif system == 'Windows':
+                    default_ip = get_ip()
+                    default_cidr = get_cidr(default_ip)
+                else:
+                    default_ip = "127.0.0.1"
+                    default_cidr = 8
                 if self.validate_ip_address(default_ip):
                     self.ip_input.setText(default_ip)
                     self.network_selector.setCurrentIndex(default_cidr)
@@ -403,7 +471,6 @@ def _run_gui() -> int:
 
 def main(argv=None) -> int:
 
-
     parser = argparse.ArgumentParser(
         prog="lancalc",
         description=f"LanCalc {VERSION}: GUI + CLI IPv4 calculator. Result to stdout, logs to stderr.",
@@ -422,7 +489,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     have_addr = bool(args.address)
-    headless = _is_headless_linux()
+    headless = is_headless_linux()
     force_cli = bool(args.no_gui)
 
     # Conditions for CLI: there is an address OR CLI is forced OR headless environment
