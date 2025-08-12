@@ -113,12 +113,6 @@ pip3 install "git+file://$(Get-Location)"
 lancalc
 ```
 
-### Test Build Windows
-```powershell
-pip3 install "git+file://$(Get-Location)"
-lancalc
-```
-
 ## License
 
 Distributed under the MIT License. See LICENSE for more information.
